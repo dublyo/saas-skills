@@ -1,0 +1,10 @@
+interface:
+  display_name: "Playwright Website Tester"
+  short_description: "Deep QA websites with fresh Playwright browser contexts."
+  default_prompt: "Use $playwright-website-tester to test this website in a fresh Playwright browser context across desktop and mobile."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "playwright"
+      description: "Playwright plugin MCP server for fresh browser-context website testing."

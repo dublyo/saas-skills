@@ -1,0 +1,4 @@
+interface:
+  display_name: "SaaS Product Growth"
+  short_description: "Build SaaS with product growth built in"
+  default_prompt: "Use $saas-product-growth to review this SaaS idea or codebase for core product workflows, monetization gates, and embedded growth loops."

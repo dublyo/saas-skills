@@ -1,0 +1,4 @@
+interface:
+  display_name: "SaaS Kit"
+  short_description: "Spec-driven SaaS planning and delivery"
+  default_prompt: "Use $saas-kit to turn this SaaS idea into a Spec Kit-style plan before coding."

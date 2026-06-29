@@ -1,0 +1,4 @@
+interface:
+  display_name: "MDN Web Best Practices"
+  short_description: "Build and audit web apps with MDN-backed standards."
+  default_prompt: "Use $mdn-web-best-practices to build or audit this web app against MDN-backed design, accessibility, performance, and security standards."

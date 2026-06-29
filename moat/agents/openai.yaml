@@ -1,0 +1,4 @@
+interface:
+  display_name: "SaaS Moat"
+  short_description: "Design SaaS moats that protect profit"
+  default_prompt: "Use $moat to review this SaaS idea for defensibility, switching costs, pricing power, retention, and profitability."
