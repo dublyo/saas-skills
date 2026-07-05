@@ -1,0 +1,353 @@
+---
+title: Full SaaS Product Flow
+markmap:
+  colorFreezeLevel: 2
+  maxWidth: 320
+  initialExpandLevel: 3
+---
+
+# **Full SaaS Product Flow**
+
+## ==1. Idea & Market==
+
+### **Problem**
+- What pain are we solving?
+- Is it painful enough to pay for?
+- Is it repeated often?
+
+### **Audience**
+- `User`: person using the product
+- `Buyer`: person paying
+- `Admin`: person managing access
+
+### **Use Case**
+- Main repeated job
+- Success moment
+- Current manual workaround
+
+### **Business Model**
+- Free
+- Trial
+- Subscription
+- Usage-based
+- Enterprise
+
+## ==2. Product Experience==
+
+### **Landing Page**
+- Explains value
+- Shows outcome
+- Converts visitor to signup
+
+### **Signup & Login**
+- Email
+- OAuth
+- Magic link
+- MFA
+
+### **Onboarding**
+- First success moment
+- Checklist
+- Demo data
+- Product tour
+
+### **Dashboard**
+- Main control center
+- Key metrics
+- Recent activity
+- Next action
+
+### **CRUD**
+- Create
+- Read
+- Update
+- Delete
+- Archive / Restore
+
+### **Workflow**
+- Status
+- Tasks
+- Approvals
+- Automation
+- Notifications
+
+## ==3. Users, Teams & Access==
+
+### **Authentication**
+- Email login
+- OAuth
+- Magic link
+- MFA
+
+### **Authorization**
+- Roles
+- Permissions
+- Resource-level access
+
+### **Teams**
+- Organizations
+- Workspaces
+- Invitations
+- Members
+
+### **Tenant Isolation**
+- Company A cannot see Company B data
+- Applies to:
+  - UI
+  - API
+  - Files
+  - Search
+  - Exports
+  - Background jobs
+
+## ==4. Data & Backend==
+
+### **Database**
+- Users
+- Organizations
+- Product records
+- Payments
+- Usage
+- Logs
+
+### **Business Logic**
+- Rules
+- Validation
+- Permissions
+- Subscription checks
+- Usage limits
+
+### **APIs**
+- Internal APIs
+- Public APIs
+- Webhooks
+- Versioning
+- Error handling
+
+### **Files**
+- Uploads
+- Reports
+- Images
+- PDFs
+- Signed URLs
+
+### **Background Jobs**
+- Emails
+- Reports
+- AI tasks
+- Imports / exports
+- Webhook processing
+
+## ==5. Monetization==
+
+### **Plans**
+- Free
+- Pro
+- Business
+- Enterprise
+
+### **Entitlements**
+- Which feature belongs to which plan
+- Backend-enforced feature gates
+
+### **Usage Metering**
+- Credits
+- Seats
+- Storage
+- API calls
+- AI tokens
+
+### **Billing**
+- Checkout
+- Invoices
+- Renewals
+- Billing portal
+
+### **Payment Webhooks**
+- Source of truth
+- Signature verification
+- Idempotency
+- Retry handling
+
+### **Failed Payments**
+- Retry
+- Dunning emails
+- Grace period
+- Access restriction
+
+## ==6. Operations==
+
+### **Admin Dashboard**
+- Users
+- Organizations
+- Billing
+- Usage
+- Support actions
+
+### **Notifications**
+- Email
+- In-app
+- Slack
+- SMS
+- Push
+
+### **Support**
+- Tickets
+- Help center
+- Live chat
+- Knowledge base
+
+### **Feature Flags**
+- Beta features
+- Gradual rollout
+- Emergency disable
+
+### **Status & Releases**
+- Changelog
+- Incident updates
+- Maintenance notices
+- Deprecation notices
+
+## ==7. Trust, Security & Reliability==
+
+### **Security**
+- XSS protection
+- CSRF protection
+- SQL injection protection
+- Secrets management
+
+### **Audit Logs**
+- Who did what
+- When it happened
+- Which resource changed
+
+### **Backups**
+- Automated backups
+- Restore testing
+- Point-in-time recovery
+
+### **Monitoring**
+- Uptime
+- Errors
+- Latency
+- Queue failures
+- Payment webhook failures
+
+### **Compliance**
+- Privacy policy
+- Terms
+- Data export
+- Account deletion
+- Data retention
+
+## ==8. Growth & Retention==
+
+### **Activation**
+- User reaches first value
+- Track activation event
+
+### **Analytics**
+- Funnels
+- Retention
+- Feature usage
+- Churn reasons
+
+### **Lifecycle Emails**
+- Welcome
+- Trial ending
+- Upgrade prompt
+- Payment failed
+- Win-back
+
+### **PLG Loops**
+- Free tools
+- Shareable reports
+- Invite teammates
+- Public pages
+- Badges
+
+### **Marketing**
+- SEO
+- Referrals
+- Affiliates
+- Partnerships
+- Comparison pages
+
+### **Customer Success**
+- Health score
+- Expansion
+- Support
+- Churn prevention
+
+## ==9. Scale & Enterprise==
+
+### **Performance**
+- Caching
+- Search
+- Pagination
+- Database indexes
+
+### **Infrastructure**
+- CI/CD
+- Staging
+- Rollback
+- Zero-downtime deploys
+
+### **Cost Control**
+- AI cost
+- Storage cost
+- Bandwidth cost
+- API cost
+- Cost per customer
+
+### **Enterprise**
+- SSO
+- SAML
+- SCIM
+- SLA
+- DPA
+
+### **Resilience**
+- Queues
+- Retries
+- Fallbacks
+- Circuit breakers
+- Disaster recovery
+
+## ==Main SaaS Build Order==
+
+1. Idea & Market
+2. Product Experience
+3. Users, Teams & Access
+4. Data & Backend
+5. Monetization
+6. Operations
+7. Trust, Security & Reliability
+8. Growth & Retention
+9. Scale & Enterprise
+
+## ==Critical SaaS Checklist==
+
+### **Must Not Forget**
+- [x] Payment webhooks
+- [x] Entitlements
+- [x] Usage metering
+- [x] Tenant isolation
+- [x] Backups and restore testing
+- [x] Audit logs
+- [x] Cost monitoring
+- [x] Account deletion
+- [x] Data export
+
+## ==Simple Mental Model==
+
+```text
+Idea
+  -> Product
+  -> Access
+  -> Data
+  -> Money
+  -> Operations
+  -> Trust
+  -> Growth
+  -> Scale

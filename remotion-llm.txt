@@ -1,0 +1,675 @@
+Remotion LLM Skill Reference
+Last checked: 2026-07-03
+Primary source checked with Playwright: https://www.remotion.dev/docs/api
+API index observed: 307 official docs links. High-value pages crawled/summarized: 180.
+
+Purpose
+Use this file as the local AI reference before planning or coding with Remotion.
+It is a practical summary of the official Remotion API docs plus implementation
+tips for a SaaS/video-rendering workflow. Keep the official links in this file
+as the source of truth when exact option names or version behavior matter.
+
+Core Rule
+Remotion is React rendered on a deterministic video timeline. Treat every visual
+state as a function of props, frame number, fps, and loaded assets. Do not rely
+on browser time, CSS transitions, CSS animations, runtime randomness, or user
+interaction during a render.
+
+Primary Official Links
+- API overview: https://www.remotion.dev/docs/api
+- Core package: https://www.remotion.dev/docs/remotion
+- CLI: https://www.remotion.dev/docs/cli
+- Config: https://www.remotion.dev/docs/config
+- Server-side rendering guide entry point: https://www.remotion.dev/docs/ssr
+- @remotion/renderer: https://www.remotion.dev/docs/renderer
+- @remotion/bundler: https://www.remotion.dev/docs/bundler
+- @remotion/player: https://www.remotion.dev/docs/player/installation
+- @remotion/media: https://www.remotion.dev/docs/media/
+- @remotion/captions: https://www.remotion.dev/docs/captions/api
+- @remotion/transitions: https://www.remotion.dev/docs/transitions/
+- @remotion/layout-utils: https://www.remotion.dev/docs/layout-utils/
+- @remotion/zod-types: https://www.remotion.dev/docs/zod-types/
+- @remotion/tailwind: https://www.remotion.dev/docs/tailwind/tailwind
+- @remotion/tailwind-v4: https://www.remotion.dev/docs/tailwind-v4/overview
+- Lambda APIs: https://www.remotion.dev/docs/lambda/api
+- Cloud Run APIs: https://www.remotion.dev/docs/cloudrun/api
+- Vercel APIs: https://www.remotion.dev/docs/vercel/api
+
+How To Use This Skill
+1. First identify whether the task is preview, composition authoring, local
+   render, self-hosted server render, Lambda/Cloud Run/Vercel render, or Player
+   embed. The correct APIs differ.
+2. Check the existing project package manager and Remotion version before adding
+   packages or using recently added APIs.
+3. Prefer the smallest Remotion package that solves the problem. Do not add
+   Lambda, Cloud Run, WebCodecs, Skia, Three, or Studio APIs unless the feature
+   actually needs them.
+4. For production rendering, separate authoring code from worker orchestration:
+   the Remotion project renders frames; the backend owns queueing, retries,
+   progress, storage, cancellation, authentication, and billing.
+5. When exact API options matter, open the linked official page. This file is
+   the working map, not a replacement for the docs.
+
+Project Setup And Preview
+- New blank project: use `npx create-video@latest --yes --blank --no-tailwind my-video`
+  unless the existing repo already has a Remotion app.
+- Start Studio: `npx remotion studio`.
+- Run a cheap visual smoke test with one still frame, for example:
+  `npx remotion still <composition-id> --scale=0.25 --frame=30`.
+- At 30 fps, frame 30 is the 1 second mark because frames are zero-based.
+- Use `npx remotion render` for full local renders only after a still/frame check
+  catches obvious layout and asset failures.
+
+Composition Model
+- Register the root with `registerRoot()`: https://www.remotion.dev/docs/register-root
+- Define videos with `<Composition>`: https://www.remotion.dev/docs/composition
+- Define single-frame outputs with `<Still>`: https://www.remotion.dev/docs/still
+- Use `<Folder>` only for Studio organization: https://www.remotion.dev/docs/folder
+- A composition declares `id`, component, `durationInFrames`, `fps`, `width`,
+  and `height`. Its props should be typed and serializable.
+- Put compositions in the Remotion root, normally `src/Root.tsx`.
+- Use `defaultProps` for Studio defaults and initial render props.
+- Prefer TypeScript `type` for composition props when tying `defaultProps` to
+  component props.
+- Use stable composition IDs. Treat them like API identifiers because render
+  workers, queues, and user projects may store them.
+
+Typed Inputs And Studio Controls
+- Use Zod schemas for user-editable composition props.
+- The schema top level must be a `z.object()` because React component props are
+  an object.
+- Use `@remotion/zod-types` for richer Studio controls:
+  - `zColor()`: https://www.remotion.dev/docs/zod-types/z-color
+  - `zTextarea()`: https://www.remotion.dev/docs/zod-types/z-textarea
+  - `zMatrix()`: https://www.remotion.dev/docs/zod-types/z-matrix
+- Use `Interactive.withSchema()` or `InteractivitySchema` when exposing timeline
+  controls for components/effects:
+  - https://www.remotion.dev/docs/interactive-with-schema
+  - https://www.remotion.dev/docs/interactivity-schema
+- Validate AI-generated JSON before passing it to Remotion. Reject or repair
+  invalid scene duration, asset URL, color, font, and transition values before
+  the render job starts.
+
+Dynamic Metadata
+- Use `calculateMetadata` when duration, fps, dimensions, props, output name, or
+  codec defaults depend on input data.
+- Good uses: calculate duration from narration/audio/video, fetch project data,
+  normalize props, set `defaultOutName`, select dimensions by platform.
+- Use the provided `abortSignal` in async fetches so Studio can cancel stale work.
+- Keep `durationInFrames` placeholders sensible because Studio still needs a
+  starting value before dynamic metadata resolves.
+- Source: https://www.remotion.dev/docs/composition
+
+Input Props
+- Prefer receiving props directly in the composition component.
+- Use `getInputProps()` only when the root needs access to CLI or Node API props.
+- `getInputProps()` is not available inside Player/client-side rendering; pass
+  props to `<Player inputProps={...}>` instead.
+- Source: https://www.remotion.dev/docs/get-input-props
+
+Environment Awareness
+- Use `getRemotionEnvironment()` or the newer environment hook when behavior must
+  differ between Studio, Player, rendering, or server-side contexts.
+- Do not branch visual output in a way that makes preview and render disagree.
+- Safe branches: logging, debug overlays, disabled expensive editor-only controls.
+- Source: https://www.remotion.dev/docs/get-remotion-environment
+
+Timeline And Frame Rules
+- `useCurrentFrame()` returns the current frame. It is zero-based.
+- Inside a `<Sequence>`, `useCurrentFrame()` is local to that sequence.
+- Use `useVideoConfig()` for `fps`, `durationInFrames`, `width`, and `height`.
+- Express human durations in seconds in your thinking, then convert with `seconds * fps`.
+- Store scene plans in seconds if that is more natural for AI/product data, but
+  convert to integer frames at the Remotion boundary.
+- Sources:
+  - https://www.remotion.dev/docs/use-current-frame
+  - https://www.remotion.dev/docs/use-video-config
+
+Sequencing
+- Use `<Sequence>` to delay, trim, or isolate timeline sections.
+- Use `<Series>` when scenes should play one after another.
+- Use negative `offset` in `<Series.Sequence>` only when scenes intentionally
+  overlap.
+- `<Sequence>` wraps children in absolute fill layout by default. Use `layout="none"`
+  when the wrapper would break layout.
+- Premount expensive or media-heavy scenes before they appear when needed.
+- `<Freeze>` is useful for holding a component at one frame.
+- `<Loop>` is useful for repeated content but make sure looped content has a
+  defined duration.
+- Sources:
+  - https://www.remotion.dev/docs/sequence
+  - https://www.remotion.dev/docs/series
+  - https://www.remotion.dev/docs/freeze
+  - https://www.remotion.dev/docs/loop
+
+Animation Rules
+- All render-critical animation must be driven by `useCurrentFrame()`.
+- Do not use CSS transitions, CSS keyframes, Tailwind `animate-*`, or Tailwind
+  `transition-*` for video motion.
+- Use `interpolate()` with explicit frame ranges and both extrapolation clamps
+  for most UI/video motion.
+- Use `Easing.bezier(x1, y1, x2, y2)` when matching design curves or CSS
+  cubic-bezier timing.
+- Use `spring()` for physics-like motion and `measureSpring()` when duration must
+  be known.
+- Use `interpolateColors()` for color transitions.
+- Normalize complex motion to one progress value, then derive opacity, transform,
+  blur, and scale from that progress.
+- Sources:
+  - https://www.remotion.dev/docs/interpolate
+  - https://www.remotion.dev/docs/easing
+  - https://www.remotion.dev/docs/spring
+  - https://www.remotion.dev/docs/measure-spring
+  - https://www.remotion.dev/docs/interpolate-colors
+  - https://www.remotion.dev/docs/animation-utils/make-transform
+  - https://www.remotion.dev/docs/animation-utils/interpolate-styles
+
+Layout
+- Use `<AbsoluteFill>` for full-frame layers:
+  https://www.remotion.dev/docs/absolute-fill
+- Use fixed composition dimensions and make child layout deterministic.
+- Avoid layout that depends on viewport size outside the composition dimensions.
+- For text-heavy generated videos, use `@remotion/layout-utils`:
+  - `measureText()`: https://www.remotion.dev/docs/layout-utils/measure-text
+  - `fitText()`: https://www.remotion.dev/docs/layout-utils/fit-text
+  - `fitTextOnNLines()`: https://www.remotion.dev/docs/layout-utils/fit-text-on-n-lines
+  - `fillTextBox()`: https://www.remotion.dev/docs/layout-utils/fill-text-box
+- Load fonts before measuring text and use the same font family, size, weight,
+  letter spacing, and style for measuring and rendering.
+- For debug outlines, prefer `outline` over `border` because borders alter layout.
+
+Assets
+- Put local assets in the project `public/` folder next to the package.json that
+  owns Remotion.
+- Use `staticFile("path.ext")` for files in `public/`; do not use raw relative
+  paths for render assets.
+- Remote URLs can be used directly when CORS, availability, and auth are handled.
+- Prefer Remotion-aware components because they wait for assets and reduce
+  flicker/missing frames:
+  - `<Img>`: https://www.remotion.dev/docs/img
+  - `<AnimatedImage>`: https://www.remotion.dev/docs/animatedimage
+  - `<OffthreadVideo>`: https://www.remotion.dev/docs/offthreadvideo
+  - `@remotion/media` `<Video>`: https://www.remotion.dev/docs/media/video
+  - `@remotion/media` `<Audio>`: https://www.remotion.dev/docs/media/audio
+- Source for static files: https://www.remotion.dev/docs/staticfile
+
+Images
+- Use `<Img>` instead of plain `<img>` for render-critical images.
+- `<Img>` waits for images before rendering frames and supports retry/error
+  behavior.
+- For image effects, use `<CanvasImage>` and `createEffect()` when a canvas-based
+  transform is appropriate:
+  - https://www.remotion.dev/docs/canvasimage
+  - https://www.remotion.dev/docs/create-effect
+
+Video And Audio
+- Prefer `@remotion/media` `<Video>` and `<Audio>` for modern media workflows,
+  especially where Player buffering or browser/WebCodecs behavior matters.
+- `<OffthreadVideo>` uses FFmpeg frame extraction during rendering. It is useful
+  for exact server-side video frames but is not supported by `@remotion/web-renderer`.
+- `<Html5Video>` and `<Html5Audio>` are lower-level synchronized HTML media tags.
+- Treat trim/start/end/duration props as frame-based unless the specific utility
+  explicitly returns seconds. For "2 seconds", use `2 * fps`.
+- Reverse playback is not generally supported.
+- Dynamic volume callbacks receive a media-local frame value that starts when the
+  media starts, not necessarily the absolute composition frame.
+- Pitch/tone changes can be server-render-only depending on component and API;
+  verify in the current docs before promising Player parity.
+- Sources:
+  - https://www.remotion.dev/docs/media/video
+  - https://www.remotion.dev/docs/media/audio
+  - https://www.remotion.dev/docs/offthreadvideo
+  - https://www.remotion.dev/docs/html5-video
+  - https://www.remotion.dev/docs/html5-audio
+
+Preloading
+- Use preload APIs for Player/client preview cases where you need smoother
+  startup:
+  - `preloadVideo()`: https://www.remotion.dev/docs/preload/preload-video
+  - `preloadAudio()`: https://www.remotion.dev/docs/preload/preload-audio
+  - `preloadImage()`: https://www.remotion.dev/docs/preload/preload-image
+  - `preloadFont()`: https://www.remotion.dev/docs/preload/preload-font
+- Do not use preloading as a substitute for render-aware asset components.
+
+Fonts
+- Use `@remotion/fonts` or `@remotion/google-fonts` instead of ad hoc font loading
+  when possible.
+- Wait for fonts before measuring text.
+- Useful links:
+  - `@remotion/fonts loadFont()`: https://www.remotion.dev/docs/fonts-api/load-font
+  - Google font `loadFont()`: https://www.remotion.dev/docs/google-fonts/load-font
+  - `getAvailableFonts()`: https://www.remotion.dev/docs/google-fonts/get-available-fonts
+  - `getInfo()`: https://www.remotion.dev/docs/google-fonts/get-info
+  - `loadFontFromInfo()`: https://www.remotion.dev/docs/google-fonts/load-font-from-info
+
+Tailwind
+- Tailwind is fine for static styling in Remotion after it is enabled.
+- Never use Tailwind animation or transition utilities for render-critical motion.
+- Use frame math plus normal class/style output instead.
+- Enable Tailwind with the Remotion docs that match the project version:
+  - Tailwind current: https://www.remotion.dev/docs/tailwind/enable-tailwind
+  - Tailwind v4: https://www.remotion.dev/docs/tailwind-v4/enable-tailwind
+
+Async Work During Rendering
+- Use `delayRender()` to block rendering for async work inside components.
+- Always call `continueRender(handle)` when work succeeds.
+- Call `cancelRender(error)` when the render cannot recover.
+- Prefer `calculateMetadata` for render-critical data that affects duration,
+  dimensions, or final props.
+- Add labels/timeouts for easier debugging when a render hangs.
+- Clean up pending async work in React effects so stale renders do not continue.
+- Sources:
+  - https://www.remotion.dev/docs/delay-render
+  - https://www.remotion.dev/docs/continue-render
+  - https://www.remotion.dev/docs/cancel-render
+
+Captions And Transcripts
+- Use `@remotion/captions` for caption object shape, SRT parsing/serialization,
+  and TikTok-style caption paging.
+- Keep caption timing in milliseconds or seconds at the ingestion boundary, then
+  convert to frames where needed for visual animation.
+- Useful links:
+  - Caption type: https://www.remotion.dev/docs/captions/caption
+  - `parseSrt()`: https://www.remotion.dev/docs/captions/parse-srt
+  - `serializeSrt()`: https://www.remotion.dev/docs/captions/serialize-srt
+  - `createTikTokStyleCaptions()`: https://www.remotion.dev/docs/captions/create-tiktok-style-captions
+  - OpenAI Whisper to captions: https://www.remotion.dev/docs/openai-whisper/openai-whisper-api-to-captions
+  - ElevenLabs transcript to captions: https://www.remotion.dev/docs/elevenlabs/elevenlabs-transcript-to-captions
+  - whisper.cpp install/transcribe:
+    https://www.remotion.dev/docs/install-whisper-cpp/install-whisper-cpp
+
+Audio Analysis And Waveforms
+- Use the official audio/media utilities rather than hand-parsing media:
+  - `getAudioData()`: https://www.remotion.dev/docs/get-audio-data
+  - `getAudioDurationInSeconds()`: https://www.remotion.dev/docs/get-audio-duration-in-seconds
+  - `getWaveformPortion()`: https://www.remotion.dev/docs/get-waveform-portion
+  - `visualizeAudio()`: https://www.remotion.dev/docs/visualize-audio
+  - `visualizeAudioWaveform()`: https://www.remotion.dev/docs/media-utils/visualize-audio-waveform
+  - `createSmoothSvgPath()`: https://www.remotion.dev/docs/media-utils/create-smooth-svg-path
+- Use windowed audio hooks only where their documented source format and runtime
+  constraints fit.
+
+Transitions
+- Use `@remotion/transitions` when scenes need declarative transitions.
+- `<TransitionSeries>` is a scene series with transition and overlay slots.
+- Transitions overlap neighboring scenes and shorten total duration by the
+  transition duration.
+- Overlays sit over the cut point and do not shorten the total duration.
+- Do not put overlay next to overlay or transition next to overlay without
+  checking the current rules.
+- Use `linearTiming()` for fixed-duration transitions and `springTiming()` when
+  spring physics are desired.
+- Useful links:
+  - https://www.remotion.dev/docs/transitions/transitionseries
+  - https://www.remotion.dev/docs/transitions/timings/lineartiming
+  - https://www.remotion.dev/docs/transitions/timings/springtiming
+  - fade: https://www.remotion.dev/docs/transitions/presentations/fade
+  - slide: https://www.remotion.dev/docs/transitions/presentations/slide
+  - wipe: https://www.remotion.dev/docs/transitions/presentations/wipe
+  - flip: https://www.remotion.dev/docs/transitions/presentations/flip
+  - clock wipe: https://www.remotion.dev/docs/transitions/presentations/clock-wipe
+  - HTML-in-canvas transitions: https://www.remotion.dev/docs/remotion/html-in-canvas
+
+Visual Effects And Drawing
+- Use specialized packages where available:
+  - Light leaks: https://www.remotion.dev/docs/light-leaks/api
+  - Motion blur: https://www.remotion.dev/docs/motion-blur/
+  - Noise: https://www.remotion.dev/docs/noise/
+  - Paths: https://www.remotion.dev/docs/paths/
+  - Shapes: https://www.remotion.dev/docs/shapes/
+  - Lottie: https://www.remotion.dev/docs/lottie/
+  - GIF: https://www.remotion.dev/docs/gif/
+  - Rive: https://www.remotion.dev/docs/rive/
+  - Skia: https://www.remotion.dev/docs/skia/
+  - Three: https://www.remotion.dev/docs/three
+  - Sound effects: https://www.remotion.dev/docs/sfx/
+- For shape generation, prefer `@remotion/shapes` helpers over hand-coded SVG
+  geometry unless custom art is required.
+- For SVG path animation, use `@remotion/paths` helpers for length, point,
+  tangent, interpolation, scaling, translation, normalization, and serialization.
+
+Player Embed
+- Use `@remotion/player` to embed a Remotion composition inside a normal React
+  app, for example Next.js or Vite.
+- `<Player>` needs component/lazy component, duration, fps, composition width,
+  composition height, and input props.
+- `<Player>` is for preview/playback in the web app, not for server rendering.
+- Use `<Thumbnail>` for still previews.
+- Do not use `getInputProps()` inside Player. Pass props via `inputProps`.
+- Links:
+  - https://www.remotion.dev/docs/player/player
+  - https://www.remotion.dev/docs/player/thumbnail
+
+Bundling And Local/Server Rendering
+- Use `bundle()` from `@remotion/bundler` to prepare a Remotion project for Node
+  rendering.
+- Important trick: call `bundle()` only when source code changes. Reuse the same
+  bundle for many renders by changing `inputProps`.
+- Use `getCompositions()` when you need the list of available compositions.
+- Use `selectComposition()` when rendering one known composition; it evaluates
+  that composition and its metadata.
+- Use `renderMedia()` for video/audio renders.
+- Use `renderStill()` for one image.
+- Use `renderFrames()` and `stitchFramesToVideo()` only when you need explicit
+  frame-level processing or custom assembly.
+- Reuse a browser with `openBrowser()` for multiple renders when worker lifetime
+  allows it.
+- Use `ensureBrowser()` during worker setup to make Chrome availability explicit.
+- Use `makeCancelSignal()` for user cancellation and backend timeouts.
+- Use `ensureFfmpeg()` and `ensureFfprobe()` when the worker depends on local
+  media tooling.
+- Links:
+  - `bundle()`: https://www.remotion.dev/docs/bundle
+  - `getCompositions()`: https://www.remotion.dev/docs/renderer/get-compositions
+  - `selectComposition()`: https://www.remotion.dev/docs/renderer/select-composition
+  - `renderMedia()`: https://www.remotion.dev/docs/renderer/render-media
+  - `renderStill()`: https://www.remotion.dev/docs/renderer/render-still
+  - `renderFrames()`: https://www.remotion.dev/docs/renderer/render-frames
+  - `stitchFramesToVideo()`: https://www.remotion.dev/docs/renderer/stitch-frames-to-video
+  - `openBrowser()`: https://www.remotion.dev/docs/renderer/open-browser
+  - `ensureBrowser()`: https://www.remotion.dev/docs/renderer/ensure-browser
+  - `makeCancelSignal()`: https://www.remotion.dev/docs/renderer/make-cancel-signal
+  - `getVideoMetadata()`: https://www.remotion.dev/docs/renderer/get-video-metadata
+  - `getSilentParts()`: https://www.remotion.dev/docs/renderer/get-silent-parts
+  - `combineChunks()`: https://www.remotion.dev/docs/renderer/combine-chunks
+  - `ensureFfmpeg()`: https://www.remotion.dev/docs/renderer/ensure-ffmpeg
+  - `ensureFfprobe()`: https://www.remotion.dev/docs/renderer/ensure-ffprobe
+  - `getCanExtractFramesFast()`: https://www.remotion.dev/docs/renderer/get-can-extract-frames-fast
+
+Self-Hosted Worker Pattern
+Use this pattern for a SaaS that renders on an Ubuntu CPU server:
+1. Backend validates user input and stores a render job.
+2. AI pipeline produces a strict JSON scene plan.
+3. Backend validates the JSON against a schema and normalizes seconds to frames.
+4. Worker receives job ID and input props from Redis/BullMQ or another queue.
+5. Worker ensures browser/ffmpeg dependencies are available.
+6. Worker bundles only when source changed, or reuses a cached bundle.
+7. Worker selects the composition with the validated props.
+8. Worker renders with progress logging and cancellation support.
+9. Worker uploads output to object storage and stores metadata.
+10. Backend exposes status, progress, logs, preview/still, and download URL.
+
+Do not describe self-hosted Remotion as a hosted rendering service. On a user's
+own server, the app must own queueing, worker capacity, retries, logs, progress,
+cleanup, browser lifecycle, storage, and security.
+
+Serverless Rendering Choices
+- Lambda is AWS-oriented:
+  - `deployFunction()`: https://www.remotion.dev/docs/lambda/deployfunction
+  - `deploySite()`: https://www.remotion.dev/docs/lambda/deploysite
+  - `renderMediaOnLambda()`: https://www.remotion.dev/docs/lambda/rendermediaonlambda
+  - `renderStillOnLambda()`: https://www.remotion.dev/docs/lambda/renderstillonlambda
+  - `getRenderProgress()`: https://www.remotion.dev/docs/lambda/getrenderprogress
+  - `downloadMedia()`: https://www.remotion.dev/docs/lambda/downloadmedia
+  - `presignUrl()`: https://www.remotion.dev/docs/lambda/presignurl
+  - `validateWebhookSignature()`: https://www.remotion.dev/docs/lambda/validatewebhooksignature
+- Cloud Run is GCP-oriented:
+  - `deployService()`: https://www.remotion.dev/docs/cloudrun/deployservice
+  - `deploySite()`: https://www.remotion.dev/docs/cloudrun/deploysite
+  - `renderMediaOnCloudrun()`: https://www.remotion.dev/docs/cloudrun/rendermediaoncloudrun
+  - `renderStillOnCloudrun()`: https://www.remotion.dev/docs/cloudrun/renderstilloncloudrun
+  - `testPermissions()`: https://www.remotion.dev/docs/cloudrun/testpermissions
+- Vercel APIs are sandbox-oriented:
+  - `createSandbox()`: https://www.remotion.dev/docs/vercel/create-sandbox
+  - `addBundleToSandbox()`: https://www.remotion.dev/docs/vercel/add-bundle-to-sandbox
+  - `renderMediaOnVercel()`: https://www.remotion.dev/docs/vercel/render-media-on-vercel
+  - `getRenderProgress()`: https://www.remotion.dev/docs/vercel/get-render-progress
+  - `uploadToVercelBlob()`: https://www.remotion.dev/docs/vercel/upload-to-vercel-blob
+
+Media Parsing And WebCodecs
+- Use `@remotion/media-parser` or `@remotion/webcodecs` when building tooling
+  around media inspection/conversion rather than simply placing media in a video.
+- Useful APIs:
+  - `parseMedia()`: https://www.remotion.dev/docs/media-parser/parse-media
+  - `downloadAndParseMedia()`: https://www.remotion.dev/docs/media-parser/download-and-parse-media
+  - parser controller: https://www.remotion.dev/docs/media-parser/media-parser-controller
+  - `convertMedia()`: https://www.remotion.dev/docs/webcodecs/convert-media
+  - available containers: https://www.remotion.dev/docs/webcodecs/get-available-containers
+  - available audio codecs: https://www.remotion.dev/docs/webcodecs/get-available-audio-codecs
+  - available video codecs: https://www.remotion.dev/docs/webcodecs/get-available-video-codecs
+  - `extractFrames()`: https://www.remotion.dev/docs/webcodecs/extract-frames
+  - `getPartialAudioData()`: https://www.remotion.dev/docs/webcodecs/get-partial-audio-data
+  - `rotateAndResizeVideoFrame()`: https://www.remotion.dev/docs/webcodecs/rotate-and-resize-video-frame
+
+Studio APIs
+- Use Studio APIs for editor tooling, file management in `public/`, timeline
+  control, and prop editing, not for production rendering.
+- Useful links:
+  - `getStaticFiles()`: https://www.remotion.dev/docs/studio/get-static-files
+  - `watchPublicFolder()`: https://www.remotion.dev/docs/studio/watch-public-folder
+  - `watchStaticFile()`: https://www.remotion.dev/docs/studio/watch-static-file
+  - `writeStaticFile()`: https://www.remotion.dev/docs/studio/write-static-file
+  - `deleteStaticFile()`: https://www.remotion.dev/docs/studio/delete-static-file
+  - `saveDefaultProps()`: https://www.remotion.dev/docs/studio/save-default-props
+  - `updateDefaultProps()`: https://www.remotion.dev/docs/studio/update-default-props
+  - `reevaluateComposition()`: https://www.remotion.dev/docs/studio/reevaluate-composition
+  - `visualControl()`: https://www.remotion.dev/docs/studio/visual-control
+  - `play()`, `pause()`, `toggle()`, `seek()`, `goToComposition()`:
+    https://www.remotion.dev/docs/studio/api
+
+AI Video Product JSON Contract Tips
+- Keep the AI contract explicit: compositionId, fps, width, height, total seconds,
+  scenes, assets, narration, captions, transitions, color tokens, font tokens.
+- Do not let AI choose arbitrary React component names or import paths.
+- Map AI scene types to a finite renderer registry, for example:
+  `title`, `image`, `stat`, `quote`, `timeline`, `comparison`, `caption`.
+- Validate each scene duration and ensure the sum matches the composition duration
+  or the dynamic metadata result.
+- Validate remote asset URLs before rendering. Cache or mirror important assets
+  to object storage for reliable renders.
+- Generate one still/preview frame before a full render when jobs are expensive.
+- Store render inputs and exact package/version metadata for reproducibility.
+- Use deterministic random seeds if a template needs variation.
+
+Common Mistakes To Avoid
+- Using CSS animations or transitions and expecting them to render correctly.
+- Using Tailwind `animate-*` or `transition-*` classes for video motion.
+- Passing raw `public/foo.png` strings instead of `staticFile("foo.png")`.
+- Fetching live network data on every frame.
+- Calling `bundle()` for every job even when source code did not change.
+- Using `getCompositions()` for one render when `selectComposition()` is enough.
+- Forgetting that frames inside `<Sequence>` are local.
+- Letting transitions shorten duration without updating total duration.
+- Measuring text before fonts are loaded.
+- Assuming Player behavior is identical to server rendering.
+- Assuming pitch, media decoding, or browser APIs behave the same in Studio,
+  Player, Lambda, local Node, and Cloud Run.
+- Letting user input reach file paths, output locations, shell commands, or
+  remote URLs without validation.
+- Treating render success as only "function returned"; verify output exists,
+  has nonzero size, expected duration, expected dimensions, and playable media.
+
+Security Checklist
+- Validate all input props with Zod or equivalent backend schema.
+- Sanitize URLs and only allow expected protocols/domains when users submit media.
+- Do not pass user strings into shell commands.
+- Use isolated temp directories per job.
+- Prevent path traversal in output and static file writes.
+- Limit render duration, dimensions, concurrency, and media file size.
+- Add cancellation/timeouts for stalled renders.
+- Store secrets only in backend/worker env, never in composition props shown to
+  Studio or Player.
+- For Lambda webhooks, validate signatures with the official API.
+- Do not expose presigned/download URLs longer than the product requires.
+
+Testing And Verification
+- Compile/typecheck the Remotion project.
+- Start Studio for authoring issues.
+- Render a still at an early frame, middle frame, and final-frame-minus-one.
+- Render a short low-scale video before a full production render.
+- Test with missing asset, slow asset, malformed props, long text, long captions,
+  very short scenes, and unsupported media.
+- For backend workers, verify queue state transitions: queued, rendering,
+  succeeded, failed, cancelled.
+- Verify retry behavior is idempotent and does not leak temp files or duplicate
+  billing/storage records.
+- Verify output metadata with ffprobe or Remotion renderer metadata helpers.
+
+API Selection Cheat Sheet
+- Need full-frame layer: `<AbsoluteFill>`.
+- Need composition definition: `<Composition>`.
+- Need still image output: `<Still>`.
+- Need delay/trim timeline section: `<Sequence>`.
+- Need back-to-back scenes: `<Series>`.
+- Need scene transitions: `<TransitionSeries>`.
+- Need current timeline position: `useCurrentFrame()`.
+- Need fps/dimensions/duration: `useVideoConfig()`.
+- Need value mapping over time: `interpolate()`.
+- Need color mapping: `interpolateColors()`.
+- Need physics motion: `spring()` plus `measureSpring()` if duration matters.
+- Need local asset URL: `staticFile()`.
+- Need render-aware image: `<Img>`.
+- Need exact server-side video frames: `<OffthreadVideo>` or `@remotion/media`
+  depending on runtime requirements.
+- Need modern media component: `@remotion/media` `<Video>` / `<Audio>`.
+- Need async component wait: `delayRender()` / `continueRender()` / `cancelRender()`.
+- Need dynamic duration/props/dimensions: `calculateMetadata`.
+- Need server render: `bundle()` -> `selectComposition()` -> `renderMedia()`.
+- Need composition list: `getCompositions()`.
+- Need browser reuse: `openBrowser()`.
+- Need browser installed: `ensureBrowser()`.
+- Need cancellation: `makeCancelSignal()`.
+- Need web app preview: `@remotion/player` `<Player>`.
+- Need captions: `@remotion/captions`.
+- Need fitted text: `@remotion/layout-utils`.
+- Need Studio prop controls: Zod schema plus `@remotion/zod-types`.
+
+Recommended Self-Hosted Render Flow
+Pseudo-flow only; verify exact options in the linked docs for the installed
+Remotion version.
+
+1. Validate input.
+2. Build or load cached bundle with `bundle(entryPoint)`.
+3. Select composition:
+   `selectComposition({ serveUrl, id, inputProps })`.
+4. Render:
+   `renderMedia({ serveUrl, composition, codec, outputLocation, inputProps })`.
+5. Record progress, logs, output path, duration, size, and errors.
+6. Upload output to storage and clean temporary files.
+
+Important source links:
+- Bundle once, render many input props: https://www.remotion.dev/docs/bundle
+- Select one composition: https://www.remotion.dev/docs/renderer/select-composition
+- Render media: https://www.remotion.dev/docs/renderer/render-media
+
+Local Skill Notes From Prior Workspace Context
+- For the veedyoo/explainer-video direction in this workspace, the strongest MVP
+  shape is JSON-driven and image-based: topic/audience/tone/length input, AI
+  scene plan, one hero image per scene, deterministic Remotion presets, preview,
+  progress, and download.
+- Self-hosted rendering on an Ubuntu CPU server is viable, but it means owning
+  the worker system around Remotion.
+- The current local Remotion demo was previously treated as a visual/spec
+  reference, not automatically the final rendering architecture.
+
+Compact Link Map
+Core:
+- https://www.remotion.dev/docs/absolute-fill
+- https://www.remotion.dev/docs/composition
+- https://www.remotion.dev/docs/still
+- https://www.remotion.dev/docs/folder
+- https://www.remotion.dev/docs/register-root
+- https://www.remotion.dev/docs/use-current-frame
+- https://www.remotion.dev/docs/use-video-config
+- https://www.remotion.dev/docs/sequence
+- https://www.remotion.dev/docs/series
+- https://www.remotion.dev/docs/freeze
+- https://www.remotion.dev/docs/loop
+- https://www.remotion.dev/docs/interpolate
+- https://www.remotion.dev/docs/interpolate-colors
+- https://www.remotion.dev/docs/easing
+- https://www.remotion.dev/docs/spring
+- https://www.remotion.dev/docs/measure-spring
+- https://www.remotion.dev/docs/staticfile
+- https://www.remotion.dev/docs/img
+- https://www.remotion.dev/docs/animatedimage
+- https://www.remotion.dev/docs/offthreadvideo
+- https://www.remotion.dev/docs/html5-video
+- https://www.remotion.dev/docs/html5-audio
+- https://www.remotion.dev/docs/delay-render
+- https://www.remotion.dev/docs/continue-render
+- https://www.remotion.dev/docs/cancel-render
+- https://www.remotion.dev/docs/get-input-props
+- https://www.remotion.dev/docs/get-remotion-environment
+
+Renderer/Bundler:
+- https://www.remotion.dev/docs/bundle
+- https://www.remotion.dev/docs/renderer/get-compositions
+- https://www.remotion.dev/docs/renderer/select-composition
+- https://www.remotion.dev/docs/renderer/render-media
+- https://www.remotion.dev/docs/renderer/render-still
+- https://www.remotion.dev/docs/renderer/render-frames
+- https://www.remotion.dev/docs/renderer/stitch-frames-to-video
+- https://www.remotion.dev/docs/renderer/open-browser
+- https://www.remotion.dev/docs/renderer/ensure-browser
+- https://www.remotion.dev/docs/renderer/make-cancel-signal
+- https://www.remotion.dev/docs/renderer/get-video-metadata
+- https://www.remotion.dev/docs/renderer/get-silent-parts
+- https://www.remotion.dev/docs/renderer/combine-chunks
+- https://www.remotion.dev/docs/renderer/ensure-ffmpeg
+- https://www.remotion.dev/docs/renderer/ensure-ffprobe
+
+Player/Media:
+- https://www.remotion.dev/docs/player/player
+- https://www.remotion.dev/docs/player/thumbnail
+- https://www.remotion.dev/docs/media/video
+- https://www.remotion.dev/docs/media/audio
+- https://www.remotion.dev/docs/preload/preload-video
+- https://www.remotion.dev/docs/preload/preload-audio
+- https://www.remotion.dev/docs/preload/preload-image
+- https://www.remotion.dev/docs/preload/preload-font
+
+Captions/Audio:
+- https://www.remotion.dev/docs/captions/caption
+- https://www.remotion.dev/docs/captions/parse-srt
+- https://www.remotion.dev/docs/captions/serialize-srt
+- https://www.remotion.dev/docs/captions/create-tiktok-style-captions
+- https://www.remotion.dev/docs/openai-whisper/openai-whisper-api-to-captions
+- https://www.remotion.dev/docs/elevenlabs/elevenlabs-transcript-to-captions
+- https://www.remotion.dev/docs/get-audio-data
+- https://www.remotion.dev/docs/get-audio-duration-in-seconds
+- https://www.remotion.dev/docs/visualize-audio
+
+Layout/Styling:
+- https://www.remotion.dev/docs/layout-utils/measure-text
+- https://www.remotion.dev/docs/layout-utils/fill-text-box
+- https://www.remotion.dev/docs/layout-utils/fit-text
+- https://www.remotion.dev/docs/layout-utils/fit-text-on-n-lines
+- https://www.remotion.dev/docs/fonts-api/load-font
+- https://www.remotion.dev/docs/google-fonts/load-font
+- https://www.remotion.dev/docs/tailwind/enable-tailwind
+- https://www.remotion.dev/docs/tailwind-v4/enable-tailwind
+- https://www.remotion.dev/docs/zod-types/z-color
+- https://www.remotion.dev/docs/zod-types/z-textarea
+- https://www.remotion.dev/docs/zod-types/z-matrix
+
+Effects/Graphics:
+- https://www.remotion.dev/docs/transitions/transitionseries
+- https://www.remotion.dev/docs/transitions/timings/lineartiming
+- https://www.remotion.dev/docs/transitions/timings/springtiming
+- https://www.remotion.dev/docs/transitions/presentations/fade
+- https://www.remotion.dev/docs/transitions/presentations/slide
+- https://www.remotion.dev/docs/transitions/presentations/wipe
+- https://www.remotion.dev/docs/light-leaks/api
+- https://www.remotion.dev/docs/lottie/
+- https://www.remotion.dev/docs/gif/
+- https://www.remotion.dev/docs/paths/
+- https://www.remotion.dev/docs/shapes/
+- https://www.remotion.dev/docs/three
+- https://www.remotion.dev/docs/skia/
+- https://www.remotion.dev/docs/sfx/
+
+Deploy:
+- https://www.remotion.dev/docs/lambda/api
+- https://www.remotion.dev/docs/lambda/rendermediaonlambda
+- https://www.remotion.dev/docs/lambda/getrenderprogress
+- https://www.remotion.dev/docs/lambda/validatewebhooksignature
+- https://www.remotion.dev/docs/cloudrun/api
+- https://www.remotion.dev/docs/cloudrun/rendermediaoncloudrun
+- https://www.remotion.dev/docs/vercel/api
+- https://www.remotion.dev/docs/vercel/render-media-on-vercel
+
+When In Doubt
+Open the official API overview first, then the exact package page. Remotion APIs
+change over time and many pages include version tags for when an option was
+added. Prefer verified current docs over memory for exact option names.
